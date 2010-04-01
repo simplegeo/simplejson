@@ -1,0 +1,70 @@
+#!/usr/bin/make -f
+#export DH_VERBOSE=1
+
+PACKAGE_NAME=python-simplejson
+MODULE_NAME=simplejson
+
+PYVERS=$(shell pyversions -vr)
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+  CFLAGS += -O0
+else
+  CFLAGS += -O2
+endif
+export CFLAGS
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -rf dist build build-stamp build-ext-*
+	rm -rf $(MODULE_NAME).egg-info
+	find . -name '*\.py[co]' -delete
+	find . -name '\._*' -delete
+	dh_clean install-stamp install-ext-* build-docs
+
+build: build-stamp build-docs
+build-stamp: $(PYVERS:%=build-ext-%)
+	touch $@
+build-ext-%:
+	dh_testdir
+	python$* setup.py build
+	touch $@
+build-docs:
+	dh_testdir
+	dh_installdirs
+	sphinx-build -N -q -E -b html . \
+	 $(CURDIR)/debian/${PACKAGE_NAME}/usr/share/doc/${PACKAGE_NAME}/
+	rm -rf $(CURDIR)/debian/${PACKAGE_NAME}/usr/share/doc/${PACKAGE_NAME}/.doctrees
+	touch $@
+
+install: install-stamp
+install-stamp: build-stamp $(PYVERS:%=install-ext-%)
+	touch $@
+install-ext-%:
+	python$* setup.py install \
+		--root $(CURDIR)/debian/$(PACKAGE_NAME) \
+		--single-version-externally-managed
+	touch $@
+
+binary-indep:
+
+binary-arch: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs
+	dh_installdocs
+	dh_link /usr/share/javascript/jquery/jquery.js \
+		/usr/share/doc/python-simplejson/_static/jquery.js
+	dh_pysupport
+	dh_strip
+	dh_compress -X.py -X.json -X.js
+	dh_fixperms
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb -- -Z bzip2
+
+binary: binary-indep binary-arch
+
+.PHONY: clean binary-indep binary-arch binary
